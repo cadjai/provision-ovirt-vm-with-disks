@@ -1,0 +1,80 @@
+---
+# tasks file for provision-ovirt-vm-with-disks
+- name: Create VM's 
+  ovirt_vm:
+    name: "{{ hostvars[instance]['vm_hostname'] }}"
+    clone: yes
+    timeout: 600 #in seconds
+    template: "{{ hostvars[instance]['vm_template'] }}"
+    cluster: "{{ hostvars[instance]['ovirt_cluster'] }}"
+    memory: "{{ hostvars[instance]['vm_memory'] }}"
+    cpu_cores: "{{ hostvars[instance]['vm_cpucores'] }}"
+    cpu_sockets: "{{ hostvars[instance]['vm_cpu'] }}"
+    operating_system: "{{ hostvars[instance]['vm_os'] }}"
+    cloud_init:
+      dns_servers: "{{ hostvars[instance]['dns_server'] }}"
+      dns_search: "{{ hostvars[instance]['vm_dns_search'] }}"
+      nic_name: eth0
+      nic_on_boot: true
+      nic_boot_protocol: "{{ hostvars[instance]['nic_boot_proto'] }}"
+      host_name: "{{ hostvars[instance]['vm_hostname'] }}.{{ hostvars[instance]['vm_host_subdomain'] }}.{{ hostvars[instance]['base_domain'] }}"
+      user_name: "{{ hostvars[instance]['vm_user'] | default(root,true) }}"
+      root_password: "{{ hostvars[instance]['vm_rootpw'] }}"
+      custom_script: |
+        write_files:
+          - content: |
+              network: {config: disabled}
+            path: /etc/cloud/cloud.cfg.d/99_disable_network_config.cfg
+            permissions: '0644'
+    state: running
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+
+- name: Create and Attach Disks if applicable
+  ovirt_disk:
+    name: "{{ hostvars[instance]['vm_hostname'] }}_{{ adisk.name }}"
+    vm_name: "{{ hostvars[instance]['vm_hostname'] }}"
+    storage_domain: "{{ hostvars[instance]['ovirt_storage_domain'] }}"
+    size: "{{ adisk.size }}"
+    timeout: 600 #in seconds
+    format: cow
+    interface: virtio_scsi
+    bootable: false
+    state: present
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  when:
+    - hostvars[instance]['attach_additional_disks'] is defined
+    - hostvars[instance]['attach_additional_disks'] | bool
+  loop: "{{ hostvars[instance]['additional_disks'] | list }}"
+  loop_control:
+    loop_var: adisk
+
+- name: Gather VM Facts
+  ovirt_vm_info:
+    pattern: "name = {{ hostvars[instance]['vm_hostname'] }} and cluster = {{ hostvars[instance]['ovirt_cluster'] }}"
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  register: vm_facts
+
+- name: Stop and Shutdown VMs
+  ovirt_vm:
+    name: "{{ hostvars[instance]['vm_hostname'] }}"
+    state: stopped
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  when:
+    - vm_facts is defined
+    - vm_facts.ovirt_vms is defined
+    - vm_facts.ovirt_vms[0] is defined
+    - vm_facts.ovirt_vms[0].run_once
+  register: vm_shutdown
+
+- name: Start VM
+  ovirt_vm:
+    name: "{{ hostvars[instance]['vm_hostname'] }}"
+    state: running
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  when: vm_shutdown is changed
+
