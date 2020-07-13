@@ -1,5 +1,12 @@
 ---
 # tasks file for provision-ovirt-vm-with-disks
+
+- name: Import VM and disk removal if applicable
+  include_tasks: remove-vms-and-disks.yml
+  when:
+    - remove_existing_vms is defined
+    - remove_existing_vms | bool
+
 - name: Create VM's 
   ovirt_vm:
     name: "{{ hostvars[instance]['vm_hostname'] }}"
@@ -12,6 +19,7 @@
     cpu_sockets: "{{ hostvars[instance]['vm_cpu'] }}"
     operating_system: "{{ hostvars[instance]['vm_os'] }}"
     cloud_init:
+      authorized_ssh_key: "{{ lookup('file', {{ sshkey_file_dir | default('/tmp') }}/{{ sshkey_filename | default('id_rsa_'{{ vm_user }})) | default(omit) }}" 
       dns_servers: "{{ hostvars[instance]['dns_server'] }}"
       dns_search: "{{ hostvars[instance]['vm_dns_search'] }}"
       nic_name: eth0

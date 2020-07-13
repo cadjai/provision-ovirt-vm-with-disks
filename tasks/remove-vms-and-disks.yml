@@ -1,0 +1,49 @@
+---
+# tasks file for provision-ovirt-vm-with-disks
+- name: Fetch all disks attached to the current vm to be removed
+  ovirt_disk_info:
+    pattern: name={{ hostvars[instance]['vm_hostname'] }}_*
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  register: attached_disks
+
+- name: Gather VM Facts
+  ovirt_vm_info:
+    pattern: "name = {{ hostvars[instance]['vm_hostname'] }} and cluster = {{ hostvars[instance]['ovirt_cluster'] }}"
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  register: vm_facts
+
+- name: Stop and Shutdown VM
+  ovirt_vm:
+    name: "{{ hostvars[instance]['vm_hostname'] }}"
+    state: stopped
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  when:
+    - vm_facts is defined
+    - vm_facts.ovirt_vms is defined
+    - vm_facts.ovirt_vms[0] is defined
+    - vm_facts.ovirt_vms[0].name == hostvars[instance]['vm_hostname']
+  register: vm_shutdown
+
+- name: Remove all attached disks fetched above
+  ovirt_disk:
+    name: "{{ adisk.name }}"
+    state: absent
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+  loop: "{{ attached_disks.ovirt_disks }}"
+  loop_control:
+    loop_var: adisk
+  when:
+    - attached_disks is defined
+    - attached_disks.ovirt_disks
+
+- name: Remove VM's 
+  ovirt_vm:
+    name: "{{ hostvars[instance]['vm_hostname'] }}"
+    state: absent 
+    auth: "{{ ovirt_auth }}"
+  delegate_to: 127.0.0.1
+
