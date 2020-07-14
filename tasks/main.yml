@@ -19,7 +19,7 @@
     cpu_sockets: "{{ hostvars[instance]['vm_cpu'] }}"
     operating_system: "{{ hostvars[instance]['vm_os'] }}"
     cloud_init:
-      authorized_ssh_key: "{{ lookup('file', {{ sshkey_file_dir | default('/tmp') }}/{{ sshkey_filename | default('id_rsa_'{{ vm_user }})) | default(omit) }}" 
+      authorized_ssh_keys: "{{ lookup('file', sshkey_file_dir + '/' + sshkey_filename  + '.pub') | default(omit) }}" 
       dns_servers: "{{ hostvars[instance]['dns_server'] }}"
       dns_search: "{{ hostvars[instance]['vm_dns_search'] }}"
       nic_name: eth0
